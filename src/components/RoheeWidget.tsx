@@ -33,7 +33,7 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
     setInput("");
 
     try {
-      const res = await fetch(`${apiBaseUrl}/api/chat`, {
+      const res = await fetch(`${apiBaseUrl}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: input }),
