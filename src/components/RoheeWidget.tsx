@@ -13,18 +13,39 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
   const [open, setOpen] = useState<boolean>(false);
   const [input, setInput] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState<boolean>(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const endRef = useRef<HTMLDivElement | null>(null);
 
+  // Scroll to bottom whenever messages update
   useEffect(() => {
-    // Optional: Add click-outside behavior
-    function handleClickOutside(e: MouseEvent) {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Optional: click outside to close (kept optional)
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
-        // Do nothing for now (you can close here if needed)
+        // Optionally close widget
       }
-    }
+    };
     window.addEventListener("click", handleClickOutside);
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
+
+  // Auto greeting on open
+  useEffect(() => {
+    if (open && messages.length === 0) {
+      setTimeout(() => {
+        setMessages([
+          {
+            sender: "rohee",
+            text: "👋 Hi there! I'm **Rohee**, Rohith Reddy’s personal AI assistant. How can I help you today?",
+          },
+        ]);
+      }, 400);
+    }
+  }, [open]);
 
   const sendMessage = async (): Promise<void> => {
     if (!input.trim()) return;
@@ -33,10 +54,12 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
     setInput("");
 
     try {
+      setIsTyping(true);
       const res = await fetch(`${apiBaseUrl}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        // ✅ Match backend: your backend expects "question"
+        body: JSON.stringify({ question: userMsg.text }),
       });
 
       if (!res.ok) throw new Error("Network error");
@@ -44,7 +67,7 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
       const data = await res.json();
       const botMsg: Message = {
         sender: "rohee",
-        text: data.reply || data.message || "No reply",
+        text: data.answer || "Hmm, I’m not sure how to respond to that.",
       };
       setMessages((prev) => [...prev, botMsg]);
     } catch (err) {
@@ -53,12 +76,13 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
         ...prev,
         { sender: "rohee", text: "⚠️ Sorry, something went wrong." },
       ]);
+    } finally {
+      setIsTyping(false);
     }
   };
 
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) =>
     setInput(e.target.value);
-  };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") sendMessage();
@@ -73,9 +97,10 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
       {open && (
         <div
           ref={boxRef}
-          className="flex flex-col w-[340px] max-h-[60vh] bg-[#0f172a] text-white rounded-2xl shadow-2xl border border-cyan-600 overflow-hidden"
+          className="flex flex-col w-[340px] max-h-[70vh] bg-white text-gray-800 rounded-2xl shadow-2xl border border-blue-300 overflow-hidden transition-all duration-300"
         >
-          <div className="p-3 bg-cyan-600 flex justify-between items-center">
+          {/* Header */}
+          <div className="p-3 bg-gradient-to-r from-blue-600 to-cyan-500 flex justify-between items-center">
             <span className="font-semibold text-white">🤖 Rohee</span>
             <button
               onClick={() => setOpen(false)}
@@ -85,7 +110,8 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
             </button>
           </div>
 
-          <div className="flex-1 p-3 overflow-y-auto">
+          {/* Messages */}
+          <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
             {messages.length === 0 && (
               <p className="text-gray-400 text-sm text-center mt-10">
                 Say hi to Rohee 👋
@@ -94,35 +120,49 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
             {messages.map((m, i) => (
               <div
                 key={i}
-                className={`my-1 ${
+                className={`my-2 ${
                   m.sender === "user" ? "text-right" : "text-left"
                 }`}
               >
                 <div
-                  className={`inline-block px-3 py-2 text-sm rounded-xl ${
+                  className={`inline-block px-3 py-2 text-sm rounded-xl shadow-sm ${
                     m.sender === "user"
-                      ? "bg-cyan-700 text-white"
-                      : "bg-gray-800 text-gray-200"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white border border-gray-200 text-gray-800"
                   }`}
+                  style={{
+                    maxWidth: "85%",
+                    wordWrap: "break-word",
+                  }}
                 >
                   {m.text}
                 </div>
               </div>
             ))}
+
+            {/* Typing indicator */}
+            {isTyping && (
+              <div className="text-left text-sm text-gray-500 italic animate-pulse">
+                Rohee is typing...
+              </div>
+            )}
+
+            <div ref={endRef}></div>
           </div>
 
-          <div className="flex items-center border-t border-gray-800 p-2 space-x-2 bg-[#0b1220]">
+          {/* Input area */}
+          <div className="flex items-center border-t border-gray-200 p-2 bg-white">
             <input
               type="text"
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Type a message..."
-              className="flex-1 text-sm bg-transparent border-none text-white outline-none placeholder-gray-400"
+              className="flex-1 text-sm bg-transparent border-none text-gray-800 outline-none placeholder-gray-400 px-2"
             />
             <button
               onClick={sendMessage}
-              className="bg-cyan-600 hover:bg-cyan-700 px-3 py-1 rounded-lg text-sm font-medium"
+              className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-90 px-3 py-1 rounded-lg text-sm font-medium text-white"
             >
               Send
             </button>
@@ -133,7 +173,7 @@ export default function RoheeWidget({ apiBaseUrl }: RoheeWidgetProps) {
       {/* Floating Icon */}
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="w-14 h-14 rounded-full bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg text-2xl flex items-center justify-center"
+        className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-90 text-white shadow-lg text-2xl flex items-center justify-center transition-all duration-200"
         title="Chat with Rohee"
       >
         🤖
